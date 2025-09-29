@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fun Friday Group Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        #chat-window::-webkit-scrollbar {
+            width: 6px;
+        }
+        #chat-window::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #chat-window::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 6px;
+        }
+        #chat-window::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4ade80; 
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4ade80; 
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans flex items-center justify-center min-h-screen">
+
+    <div id="name-modal" class="w-full max-w-sm bg-white p-8 rounded-2xl shadow-2xl text-center">
+        <h2 class="text-2xl font-bold mb-2 text-gray-800">Join the Chat</h2>
+        <p class="text-gray-500 mb-6">Please enter your name to begin.</p>
+        <form id="name-form">
+            <input type="text" id="name-input" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-400" placeholder="Your Name..." required>
+            <button type="submit" class="w-full mt-4 bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600 transition-colors">
+                Start Chatting
+            </button>
+        </form>
+    </div>
+
+    <div id="chat-container" class="w-full max-w-sm h-[90vh] md:h-[80vh] flex-col bg-white rounded-2xl shadow-2xl hidden">
+        <header class="flex items-center justify-between p-4 border-b bg-white rounded-t-2xl shadow-md z-10">
+            <div class="flex items-center space-x-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                <img src="https://placehold.co/40x40/F87171/FFFFFF?text=FF" alt="Group Icon" class="w-10 h-10 rounded-full">
+                <div>
+                    <h1 class="text-md font-bold text-gray-800">Fun Friday Group</h1>
+                </div>
+            </div>
+            <img id="user-header-icon" src="https://placehold.co/40x40/EAB308/FFFFFF?text=U" alt="User Icon" class="w-10 h-10 rounded-full">
+        </header>
+
+        <main id="chat-window" class="flex-1 p-4 overflow-y-auto bg-gray-50 space-y-4">
+        </main>
+
+        <footer class="p-4 bg-white rounded-b-2xl border-t">
+             <div class="flex items-center justify-center mb-2">
+                <span class="text-sm text-gray-500 mr-3">Appear as Anonymous</span>
+                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" name="toggle" id="anonymous-toggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-2 appearance-none cursor-pointer"/>
+                    <label for="anonymous-toggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                </div>
+            </div>
+
+            <form id="message-form" class="flex items-center space-x-3">
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off" class="flex-1 w-full px-4 py-2 text-gray-700 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-red-400">
+                <button type="button" class="p-2 text-gray-500 hover:text-red-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                </button>
+                 <button type="submit" class="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-transform transform hover:scale-110">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                </button>
+            </form>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const nameModal = document.getElementById('name-modal');
+            const nameForm = document.getElementById('name-form');
+            const nameInput = document.getElementById('name-input');
+            const chatContainer = document.getElementById('chat-container');
+
+            nameForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const userName = nameInput.value.trim();
+                if (userName) {
+                    nameModal.classList.add('hidden');
+                    chatContainer.classList.remove('hidden');
+                    chatContainer.classList.add('flex'); 
+                    initializeChat(userName);
+                }
+            });
+
+            function initializeChat(userName) {
+                const socket = io('http://localhost:3000'); 
+                const userId = 'user_' + Date.now(); 
+
+                const chatWindow = document.getElementById('chat-window');
+                const messageForm = document.getElementById('message-form');
+                const messageInput = document.getElementById('message-input');
+                const anonymousToggle = document.getElementById('anonymous-toggle');
+                const userHeaderIcon = document.getElementById('user-header-icon');
+
+                 if (userHeaderIcon) {
+                    userHeaderIcon.src = `https://placehold.co/40x40/EAB308/FFFFFF?text=${userName.charAt(0).toUpperCase()}`;
+                    userHeaderIcon.alt = `${userName}'s Icon`;
+                }
+
+                function scrollToBottom() {
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                }
+
+                function displayMessage(msg) {
+                    const isCurrentUser = msg.user_id === userId;
+                    
+                    const messageWrapper = document.createElement('div');
+                    messageWrapper.classList.add('flex', 'items-end', 'space-x-2', isCurrentUser ? 'justify-end' : 'justify-start');
+
+                    const messageBubble = `
+                        <div class="flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'}">
+                            ${!isCurrentUser ? `<span class="text-xs text-gray-500 ml-2">${msg.sender_name}</span>` : ''}
+                            <div class="px-4 py-2 rounded-2xl max-w-xs md:max-w-md ${isCurrentUser ? 'bg-red-500 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'}">
+                                <p class="text-sm">${msg.content}</p>
+                            </div>
+                            <span class="text-xs text-gray-400 mt-1">${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                    `;
+                    
+                    const avatar = `<img src="https://placehold.co/32x32/${isCurrentUser ? 'EAB308' : '9CA3AF'}/FFFFFF?text=${msg.sender_name.charAt(0).toUpperCase()}" alt="avatar" class="w-8 h-8 rounded-full ${isCurrentUser ? 'order-last ml-2' : ''}">`;
+
+                    messageWrapper.innerHTML = isCurrentUser ? messageBubble + avatar : avatar + messageBubble;
+                    chatWindow.appendChild(messageWrapper);
+                }
+                
+                async function loadMessages() {
+                    try {
+                        const response = await fetch('http://localhost:3000/messages');
+                        if (!response.ok) throw new Error('Failed to fetch messages');
+                        const messages = await response.json();
+                        messages.forEach(displayMessage);
+                        scrollToBottom();
+                    } catch (error) {
+                        console.error(error);
+                        chatWindow.innerHTML = '<p class="text-center text-red-500">Could not load messages.</p>';
+                    }
+                }
+
+                messageForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const content = messageInput.value.trim();
+                    
+                    if (content) {
+                        const isAnonymous = anonymousToggle.checked;
+                        socket.emit('sendMessage', {
+                            userId,
+                            userName,
+                            content,
+                            isAnonymous
+                        });
+                        messageInput.value = '';
+                    }
+                });
+
+                socket.on('newMessage', (msg) => {
+                    displayMessage(msg);
+                    scrollToBottom();
+                });
+
+                loadMessages();
+            }
+        });
+    </script>
+</body>
+</html>
+
